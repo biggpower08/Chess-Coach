@@ -24,6 +24,10 @@ The GitHub Pages version is designed for:
 - Local static coach feedback without OpenAI
 - Light/dark theme toggle
 - Engine settings panel and toast notifications
+- Cyberpunk-inspired glass/neon visual system
+- Play vs Computer mode with Stockfish/fallback replies
+- Opening and endgame awareness
+- Triage-based coach notes and Game Report panel
 - FastAPI backend scaffold with OpenAI-only coach integration for future hosted backend use
 
 ## Project Structure
@@ -169,7 +173,8 @@ git push -u origin main
 
 - GitHub Pages cannot host FastAPI, so OpenAI coaching is not active in the static site.
 - Browser Stockfish can be heavy on older devices; the app falls back to material evaluation if needed.
-- Principal-variation "show me" animation is not implemented yet.
+- Principal-variation "show me" animation is lightweight and limited to the current main line.
+- Play vs Computer is functional but still basic compared with a dedicated engine-play product.
 - Player profiles are placeholders until a database is connected.
 
 ## Next Steps After You Talk With Your Friend
@@ -181,3 +186,4 @@ git push -u origin main
 5. Generate personalized training plans.
 6. Add opening repertoire analysis.
 7. Add PV animation and richer game reports.
+8. Improve play-vs-Stockfish difficulty, time controls, and post-game review flow.

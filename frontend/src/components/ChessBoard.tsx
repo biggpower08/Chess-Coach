@@ -32,7 +32,6 @@ export function ChessBoard({
   onSelectSquare,
   onMove
 }: ChessBoardProps) {
-  const board = game.board();
   const ranks = orientation === 'white' ? [8, 7, 6, 5, 4, 3, 2, 1] : [1, 2, 3, 4, 5, 6, 7, 8];
   const files = orientation === 'white' ? ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'] : ['h', 'g', 'f', 'e', 'd', 'c', 'b', 'a'];
 
@@ -41,7 +40,10 @@ export function ChessBoard({
   }
 
   return (
-    <div className="board-panel playable-board" aria-label="Playable chess board">
+    <div
+      className="board-panel playable-board"
+      aria-label={`Playable chess board with ${ranks.length} ranks and ${files.length} files`}
+    >
       {ranks.flatMap((rank) =>
         files.map((file) => {
           const square = `${file}${rank}` as Square;
@@ -81,7 +83,7 @@ export function ChessBoard({
           );
         })
       )}
-      <span className="sr-only">{board.length} board rows rendered</span>
+      <span className="sr-only">8 by 8 board rendered with 64 squares</span>
     </div>
   );
 }

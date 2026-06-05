@@ -7,15 +7,18 @@ async def generate_mock_coaching_response(
     move_count = len(context.san_moves)
     if context.task == "coach_game":
         summary = (
-            "Mock coach: this game review should focus on when the plan became unclear, "
-            "which pieces were left undefended, and whether forcing moves were checked "
-            "before quiet moves."
+            "Mock coach: what happened is the game reached a review point where plans "
+            "matter more than raw moves. Why it matters: repeated unclear plans become "
+            "recurring weaknesses. Better idea: compare forcing moves, piece activity, "
+            "and king safety before choosing. Concept to practice: candidate-move discipline."
         )
     else:
         summary = (
-            f"Mock coach: I parsed {move_count} moves. The first useful review pass is "
-            "to identify one critical position, write down candidate moves, then compare "
-            "that thinking with engine analysis in a later phase."
+            f"Mock coach: I parsed {move_count} moves. What happened: the game is ready "
+            "for a structured review. Why it matters: the biggest learning usually comes "
+            "from one or two critical decisions. Better idea: identify a critical position "
+            "and write down candidate moves first. Concept to practice: explain your plan "
+            "before checking the engine."
         )
 
     return CoachingResponse(

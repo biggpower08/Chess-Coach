@@ -36,6 +36,16 @@ export const CLASSIFICATION_THRESHOLDS = {
   mistakeLoss: 250
 };
 
+export const OPENING_BOOK: Array<{ moves: string[]; name: string; idea: string }> = [
+  { moves: ['e4', 'e5', 'Nf3', 'Nc6', 'Bb5'], name: 'Ruy Lopez', idea: 'Pressure the e5 pawn while developing smoothly and preparing to castle.' },
+  { moves: ['e4', 'c5'], name: 'Sicilian Defense', idea: 'Black fights for the center from the flank and creates an unbalanced game.' },
+  { moves: ['e4', 'e6'], name: 'French Defense', idea: 'Black builds a solid pawn chain and challenges White later with ...c5.' },
+  { moves: ['d4', 'Nf6', 'c4', 'g6'], name: "King's Indian Defense", idea: 'Black lets White build the center, then attacks it with piece pressure and pawn breaks.' },
+  { moves: ['d4', 'd5', 'c4'], name: "Queen's Gambit", idea: 'White offers a wing pawn to pull Black away from the center.' },
+  { moves: ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4'], name: 'Italian Game', idea: 'White develops quickly and aims at the sensitive f7 square.' },
+  { moves: ['e4', 'c6'], name: 'Caro-Kann Defense', idea: 'Black builds a durable center and tries to reach a sound structure.' }
+];
+
 const PIECE_VALUES: Record<string, number> = {
   p: 100,
   n: 320,
@@ -158,11 +168,6 @@ export function classifyHistory(moves: Move[], evaluations: Array<PositionEvalua
   });
 }
 
-export function squareFromDrag(value: string | null): Square | null {
-  if (!value || !/^[a-h][1-8]$/.test(value)) return null;
-  return value as Square;
-}
-
 export function describeMoveForSkill(move: Move, skillLevel: string) {
   if (skillLevel !== 'beginner') return move.san;
   const pieceNames: Record<string, string> = {
@@ -179,4 +184,107 @@ export function describeMoveForSkill(move: Move, skillLevel: string) {
   const action = move.captured ? 'takes on' : 'moves to';
   const suffix = move.san.includes('#') ? ' with checkmate' : move.san.includes('+') ? ' with check' : '';
   return `${piece} ${action} ${move.to}${suffix}`;
+}
+
+export function detectOpening(moves: Move[]) {
+  const sanMoves = moves.map((move) => move.san.replace(/[+#?!]+/g, ''));
+  let best = OPENING_BOOK[0];
+  let bestScore = 0;
+
+  for (const opening of OPENING_BOOK) {
+    const score = opening.moves.reduce((count, move, index) => {
+      return sanMoves[index] === move ? count + 1 : count;
+    }, 0);
+    if (score > bestScore) {
+      best = opening;
+      bestScore = score;
+    }
+  }
+
+  if (bestScore < 2) {
+    return {
+      name: 'Unidentified opening',
+      idea: 'Develop pieces, contest the center, and keep your king safe.',
+      confidence: 'low' as const
+    };
+  }
+
+  return { ...best, confidence: bestScore >= best.moves.length ? 'high' as const : 'partial' as const };
+}
+
+export function detectPhase(game: Chess) {
+  const board = game.board();
+  let nonPawnMaterial = 0;
+  let queens = 0;
+
+  for (const row of board) {
+    for (const piece of row) {
+      if (!piece) continue;
+      if (piece.type === 'q') queens += 1;
+      if (piece.type !== 'p' && piece.type !== 'k') nonPawnMaterial += 1;
+    }
+  }
+
+  if (nonPawnMaterial <= 6 || queens === 0) {
+    return {
+      phase: 'endgame',
+      note: 'Endgame principles matter now: king activity, passed pawns, and clean conversion.'
+    };
+  }
+
+  if (game.moveNumber() <= 10) {
+    return {
+      phase: 'opening',
+      note: 'Opening priorities: develop, castle, and fight for central squares.'
+    };
+  }
+
+  return {
+    phase: 'middlegame',
+    note: 'Middlegame priorities: improve your worst piece, calculate forcing moves, and pick a plan.'
+  };
+}
+
+export function shouldAutoCoach(move: ClassifiedMove | null, phase: string) {
+  if (!move?.classification) return false;
+  if (move.classification === 'brilliant' || move.classification === 'great') return true;
+  if (move.classification === 'inaccuracy') return true;
+  if (phase === 'endgame' && ['mistake', 'inaccuracy'].includes(move.classification)) return true;
+  return false;
+}
+
+export function buildGameReport(moves: ClassifiedMove[]) {
+  const counts = {
+    brilliant: 0,
+    great: 0,
+    good: 0,
+    inaccuracy: 0,
+    mistake: 0,
+    blunder: 0
+  };
+
+  for (const move of moves) {
+    if (move.classification) counts[move.classification] += 1;
+  }
+
+  const total = moves.filter((move) => move.classification).length || 1;
+  const accuracy =
+    ((counts.brilliant * 1 + counts.great * 0.95 + counts.good * 0.85 + counts.inaccuracy * 0.6 + counts.mistake * 0.35) /
+      total) *
+    100;
+
+  const recurringMistakes = [
+    counts.blunder + counts.mistake > 0 ? 'Large tactical swings: slow down before forcing replies.' : '',
+    counts.inaccuracy > 2 ? 'Small positional slips: improve worst piece before committing pawns.' : '',
+    counts.good + counts.great + counts.brilliant > total * 0.65 ? 'Stable decision-making: most moves kept the evaluation under control.' : ''
+  ].filter(Boolean);
+
+  return {
+    counts,
+    accuracy: Math.round(accuracy),
+    recurringMistakes,
+    topLessons: recurringMistakes.length
+      ? recurringMistakes
+      : ['Keep building the habit of comparing candidate moves before committing.']
+  };
 }

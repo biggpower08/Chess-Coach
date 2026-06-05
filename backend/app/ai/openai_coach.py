@@ -1,5 +1,6 @@
 from app.ai.mock_coach import generate_mock_coaching_response
 from app.coaching.prompts import build_coaching_prompt
+from app.coaching.system_prompts import build_system_prompt
 from app.config import get_settings
 from app.models import CoachingContext, CoachingResponse
 
@@ -26,10 +27,7 @@ async def get_coach_response(context: CoachingContext) -> CoachingResponse:
         messages=[
             {
                 "role": "system",
-                "content": (
-                    "You are a clear, practical chess coach. Explain mistakes simply, "
-                    "name recurring patterns, and suggest focused training."
-                ),
+                "content": build_system_prompt(),
             },
             {"role": "user", "content": prompt},
         ],

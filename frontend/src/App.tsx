@@ -15,10 +15,13 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
+  buildGameReport,
   classifyHistory,
   createGameAtMove,
+  detectOpening,
+  detectPhase,
   getGameStatus,
-  squareFromDrag,
+  shouldAutoCoach,
   type PositionEvaluation
 } from './chessLogic';
 import { BrowserEngine, type EngineStatus } from './engine';
@@ -32,6 +35,7 @@ import { PgnImport } from './components/PgnImport';
 import { PlayerProfile } from './components/PlayerProfile';
 import { Toast } from './components/Toast';
 import { TrainingPlan } from './components/TrainingPlan';
+import { GameReport } from './components/GameReport';
 
 const samplePgn = `[Event "Friendly"]
 [Site "Local"]
@@ -50,6 +54,8 @@ export function App() {
   const [history, setHistory] = useState<Move[]>([]);
   const [viewIndex, setViewIndex] = useState(0);
   const [orientation, setOrientation] = useState<'white' | 'black'>('white');
+  const [mode, setMode] = useState<'analysis' | 'play'>('analysis');
+  const [playerSide, setPlayerSide] = useState<'white' | 'black'>('white');
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
   const [pgn, setPgn] = useState(samplePgn);
   const [pgnError, setPgnError] = useState<string | null>(null);
@@ -63,22 +69,28 @@ export function App() {
     return saved ? JSON.parse(saved) as { depth: number; multiPV: number } : { depth: 12, multiPV: 1 };
   });
   const [skillLevel, setSkillLevel] = useState('beginner');
-  const [theme, setTheme] = useState(() => localStorage.getItem('chess-coach-theme') ?? 'light');
+  const [theme, setTheme] = useState(() => localStorage.getItem('chess-coach-theme') ?? 'dark');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [coachMessage, setCoachMessage] = useState(DEFAULT_COACH);
   const [toast, setToast] = useState<string | null>(null);
+  const [variationGame, setVariationGame] = useState<Chess | null>(null);
+  const [variationPlaying, setVariationPlaying] = useState(false);
   const engineRef = useRef<BrowserEngine | null>(null);
 
   const viewingHistory = viewIndex < history.length;
   const viewedGame = useMemo(() => createGameAtMove(history, viewIndex), [history, viewIndex]);
-  const activeGame = viewingHistory ? viewedGame : game;
+  const activeGame = variationGame ?? (viewingHistory ? viewedGame : game);
   const status = getGameStatus(activeGame, viewingHistory, viewIndex, history.length);
   const classifiedMoves = useMemo(() => classifyHistory(history, evaluations), [history, evaluations]);
   const currentEvaluation = evaluations[viewIndex] ?? null;
   const currentMove = viewIndex > 0 ? classifiedMoves[viewIndex - 1] ?? null : null;
+  const opening = useMemo(() => detectOpening(history), [history]);
+  const phase = useMemo(() => detectPhase(activeGame), [activeGame]);
+  const gameReport = useMemo(() => buildGameReport(classifiedMoves), [classifiedMoves]);
+  const computerTurn = mode === 'play' && !game.isGameOver() && game.turn() !== playerSide[0];
 
   const legalTargets = useMemo(() => {
-    if (!selectedSquare || viewingHistory) return [];
+    if (!selectedSquare || viewingHistory || variationGame || computerTurn) return [];
     return activeGame.moves({ square: selectedSquare, verbose: true }).map((move) => move.to as Square);
   }, [activeGame, selectedSquare, viewingHistory]);
 
@@ -101,6 +113,28 @@ export function App() {
     engineRef.current = engine;
     void analyzePosition(new Chess().fen(), 0);
   }, []);
+
+  useEffect(() => {
+    if (mode === 'play' && playerSide === 'black' && history.length === 0) {
+      void requestComputerMove(game, history);
+    }
+  }, [mode, playerSide]);
+
+  useEffect(() => {
+    if (shouldAutoCoach(currentMove, phase.phase)) {
+      setCoachMessage(
+        `Coach triage: this ${currentMove?.classification} is worth a short note. ${generateLocalCoachText({
+          currentMove,
+          evaluation: currentEvaluation,
+          skillLevel,
+          status,
+          openingName: opening.name,
+          phase: phase.phase,
+          phaseNote: phase.note
+        })}`
+      );
+    }
+  }, [currentMove?.classification, phase.phase]);
 
   useEffect(() => {
     if (!toast) return;
@@ -141,11 +175,29 @@ export function App() {
     setHistory(nextHistory);
     setViewIndex(nextViewIndex);
     setSelectedSquare(null);
+    setVariationGame(null);
+  }
+
+  function playMove(nextGame: Chess, move: Move) {
+    const nextHistory = [...history, move];
+    commitGame(nextGame, nextHistory);
+    void analyzePosition(nextGame.fen(), nextHistory.length);
+    if (mode === 'play' && !nextGame.isGameOver() && nextGame.turn() !== playerSide[0]) {
+      void requestComputerMove(nextGame, nextHistory);
+    }
   }
 
   function handleMove(from: Square, to: Square) {
     if (viewingHistory) {
       showToast('Jump to the latest move before playing.');
+      return;
+    }
+    if (variationGame) {
+      showToast('Return to the real game before moving.');
+      return;
+    }
+    if (computerTurn) {
+      showToast('Stockfish is thinking.');
       return;
     }
 
@@ -156,13 +208,11 @@ export function App() {
       return;
     }
 
-    const nextHistory = [...history, move];
-    commitGame(nextGame, nextHistory);
-    void analyzePosition(nextGame.fen(), nextHistory.length);
+    playMove(nextGame, move);
   }
 
   function handleSelectSquare(square: Square) {
-    if (viewingHistory) return;
+    if (viewingHistory || variationGame || computerTurn) return;
     const piece = game.get(square);
 
     if (selectedSquare) {
@@ -182,6 +232,7 @@ export function App() {
     const nextIndex = Math.max(0, Math.min(index, history.length));
     setViewIndex(nextIndex);
     setSelectedSquare(null);
+    setVariationGame(null);
   }
 
   function resetGame() {
@@ -189,6 +240,24 @@ export function App() {
     setEvaluations([]);
     setCoachMessage(DEFAULT_COACH);
     void analyzePosition(new Chess().fen(), 0);
+  }
+
+  function newPlayGame(side = playerSide) {
+    const nextGame = new Chess();
+    setMode('play');
+    setPlayerSide(side);
+    setOrientation(side);
+    commitGame(nextGame, [], 0);
+    setEvaluations([]);
+    setCoachMessage(`Play vs Stockfish started. You are ${side}.`);
+    void analyzePosition(nextGame.fen(), 0);
+    if (side === 'black') void requestComputerMove(nextGame, []);
+  }
+
+  function resignGame() {
+    if (mode !== 'play') return;
+    setCoachMessage(`You resigned as ${playerSide}. Start a new game when you are ready.`);
+    showToast('Game resigned');
   }
 
   function undoMove() {
@@ -209,6 +278,7 @@ export function App() {
       const importedHistory = imported.history({ verbose: true });
       if (importedHistory.length === 0) throw new Error('PGN did not contain any legal moves.');
       setPgnError(null);
+      setMode('analysis');
       commitGame(imported, importedHistory);
       setEvaluations([]);
       setCoachMessage('Game loaded. Use the move list and navigation buttons to review it.');
@@ -240,12 +310,62 @@ export function App() {
         currentMove,
         evaluation: currentEvaluation,
         skillLevel,
-        status
+        status,
+        openingName: opening.name,
+        phase: phase.phase,
+        phaseNote: phase.note
       })
     );
   }
 
-  const title = history.length > 0 ? 'Reviewing game' : 'Personalized Chess Coach AI';
+  async function requestComputerMove(sourceGame: Chess, sourceHistory: Move[]) {
+    const best = await engineRef.current?.bestMove(sourceGame.fen());
+    const nextGame = new Chess(sourceGame.fen());
+    let move: Move | null = null;
+
+    if (best) {
+      move = nextGame.move({
+        from: best.slice(0, 2) as Square,
+        to: best.slice(2, 4) as Square,
+        promotion: best.slice(4, 5) || 'q'
+      });
+    }
+
+    if (!move) {
+      const legal = nextGame.moves({ verbose: true });
+      const captures = legal.filter((candidate) => candidate.captured);
+      move = nextGame.move((captures[0] ?? legal[0])?.san);
+    }
+
+    if (!move) return;
+    const nextHistory = [...sourceHistory, move];
+    commitGame(nextGame, nextHistory);
+    void analyzePosition(nextGame.fen(), nextHistory.length);
+  }
+
+  async function showVariation() {
+    if (!currentEvaluation?.pv.length) {
+      showToast('No engine line available yet.');
+      return;
+    }
+    setVariationPlaying(true);
+    const runner = new Chess(activeGame.fen());
+    setVariationGame(new Chess(runner.fen()));
+
+    for (const uci of currentEvaluation.pv.slice(0, 6)) {
+      const move = runner.move({
+        from: uci.slice(0, 2) as Square,
+        to: uci.slice(2, 4) as Square,
+        promotion: uci.slice(4, 5) || 'q'
+      });
+      if (!move) break;
+      setVariationGame(new Chess(runner.fen()));
+      await new Promise((resolve) => window.setTimeout(resolve, 650));
+    }
+    setVariationPlaying(false);
+  }
+
+  const title = mode === 'play' ? `Play vs Stockfish (${playerSide})` : history.length > 0 ? 'Reviewing game' : 'Personalized Chess Coach AI';
 
   return (
     <main className="app-shell">
@@ -257,6 +377,18 @@ export function App() {
             <p className={`game-status ${engineStatus.status}`}>{status}</p>
           </div>
           <div className="top-actions">
+            <select value={mode} onChange={(event) => setMode(event.target.value as 'analysis' | 'play')} aria-label="Mode">
+              <option value="analysis">Analysis / Review</option>
+              <option value="play">Play vs Computer</option>
+            </select>
+            <select
+              value={playerSide}
+              onChange={(event) => newPlayGame(event.target.value as 'white' | 'black')}
+              aria-label="Player side"
+            >
+              <option value="white">Play White</option>
+              <option value="black">Play Black</option>
+            </select>
             <select value={skillLevel} onChange={(event) => setSkillLevel(event.target.value)} aria-label="Skill level">
               <option value="beginner">Beginner</option>
               <option value="intermediate">Intermediate</option>
@@ -297,6 +429,8 @@ export function App() {
               <button onClick={() => goToMove(history.length)} type="button"><ChevronLast size={17} /> Last</button>
               <button onClick={undoMove} type="button"><StepBack size={17} /> Undo</button>
               <button onClick={resetGame} type="button"><RotateCcw size={17} /> Reset</button>
+              <button onClick={() => newPlayGame(playerSide)} type="button">New vs SF</button>
+              <button onClick={resignGame} type="button">Resign</button>
             </div>
             <p className={`engine-status ${engineStatus.status}`}>{engineStatus.message}</p>
           </section>
@@ -318,9 +452,17 @@ export function App() {
             skillLevel={skillLevel}
             viewIndex={viewIndex}
           />
-          <CoachPanel message={coachMessage} onCoachMove={coachCurrentMove} />
+          <CoachPanel
+            isShowingVariation={Boolean(variationGame) || variationPlaying}
+            message={coachMessage}
+            onBackToGame={() => setVariationGame(null)}
+            onCoachMove={coachCurrentMove}
+            onShowVariation={() => void showVariation()}
+            variation={currentEvaluation?.pv ?? []}
+          />
           <PlayerProfile />
           <TrainingPlan items={currentMove?.classification ? [`Study this ${currentMove.classification}`, 'Compare your move to the engine line'] : []} />
+          <GameReport report={gameReport} opening={opening} phase={phase} />
         </section>
       </section>
       <Toast message={toast} />

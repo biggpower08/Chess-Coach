@@ -2,9 +2,18 @@ import { fallbackEvaluateFen, type PositionEvaluation } from './chessLogic';
 
 export type EngineStatus = 'loading' | 'ready' | 'analyzing' | 'fallback' | 'error';
 
-type PendingRequest = {
+type EvalRequest = {
   fen: string;
-  resolve: (evaluation: PositionEvaluation) => void;
+  mode: 'eval';
+  resolve: (result: PositionEvaluation) => void;
+  timeout: number;
+  lastEval: PositionEvaluation | null;
+};
+
+type MoveRequest = {
+  fen: string;
+  mode: 'move';
+  resolve: (result: string | null) => void;
   timeout: number;
   lastEval: PositionEvaluation | null;
 };
@@ -12,7 +21,7 @@ type PendingRequest = {
 export class BrowserEngine {
   private worker: Worker | null = null;
   private ready = false;
-  private pending: PendingRequest | null = null;
+  private pending: EvalRequest | MoveRequest | null = null;
   private statusListener: (status: EngineStatus, message: string) => void;
   private settings = { depth: 12, multiPV: 1 };
 
@@ -44,9 +53,7 @@ export class BrowserEngine {
     }
 
     if (this.pending) {
-      window.clearTimeout(this.pending.timeout);
-      this.pending.resolve(fallbackEvaluateFen(this.pending.fen));
-      this.pending = null;
+      this.cancelPending();
     }
 
     this.statusListener('analyzing', `Analyzing depth ${this.settings.depth}...`);
@@ -59,10 +66,37 @@ export class BrowserEngine {
         resolve(fallback);
       }, Math.max(5000, this.settings.depth * 900));
 
-      this.pending = { fen, resolve, timeout, lastEval: null };
+      this.pending = { fen, mode: 'eval', resolve, timeout, lastEval: null };
       this.post('stop');
       this.post('ucinewgame');
       this.post(`setoption name MultiPV value ${this.settings.multiPV}`);
+      this.post(`position fen ${fen}`);
+      this.post(`go depth ${this.settings.depth}`);
+    });
+  }
+
+  bestMove(fen: string) {
+    if (!this.ready || !this.worker) {
+      this.statusListener('fallback', 'Engine move unavailable. Using fallback move.');
+      return Promise.resolve<string | null>(null);
+    }
+
+    if (this.pending) {
+      this.cancelPending();
+    }
+
+    this.statusListener('analyzing', `Computer thinking at depth ${this.settings.depth}...`);
+    return new Promise<string | null>((resolve) => {
+      const timeout = window.setTimeout(() => {
+        if (!this.pending) return;
+        this.pending = null;
+        this.statusListener('fallback', 'Computer timed out. Using fallback move.');
+        resolve(null);
+      }, Math.max(5000, this.settings.depth * 900));
+
+      this.pending = { fen, mode: 'move', resolve, timeout, lastEval: null };
+      this.post('stop');
+      this.post('ucinewgame');
       this.post(`position fen ${fen}`);
       this.post(`go depth ${this.settings.depth}`);
     });
@@ -108,10 +142,15 @@ export class BrowserEngine {
 
     if (line.startsWith('bestmove') && this.pending) {
       window.clearTimeout(this.pending.timeout);
-      const evaluation = this.pending.lastEval ?? fallbackEvaluateFen(this.pending.fen);
-      this.pending.resolve(evaluation);
+      const bestMove = line.split(/\s+/)[1];
+      if (this.pending.mode === 'move') {
+        this.pending.resolve(bestMove && bestMove !== '(none)' ? bestMove : null);
+      } else {
+        const evaluation = this.pending.lastEval ?? fallbackEvaluateFen(this.pending.fen);
+        this.pending.resolve(evaluation);
+      }
       this.pending = null;
-      this.statusListener('ready', `Depth ${evaluation.depth || 'fallback'}`);
+      this.statusListener('ready', 'Engine ready');
     }
   }
 
@@ -119,6 +158,17 @@ export class BrowserEngine {
     this.worker = null;
     this.ready = false;
     this.statusListener('fallback', message);
+  }
+
+  private cancelPending() {
+    if (!this.pending) return;
+    window.clearTimeout(this.pending.timeout);
+    if (this.pending.mode === 'move') {
+      this.pending.resolve(null);
+    } else {
+      this.pending.resolve(fallbackEvaluateFen(this.pending.fen));
+    }
+    this.pending = null;
   }
 
   private post(message: string) {
