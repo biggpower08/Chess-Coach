@@ -1,16 +1,30 @@
 # personal-chess-coach-ai
 
-A private chess coach app that analyzes pasted PGNs, explains mistakes in plain English, and will eventually track recurring weaknesses and generate personalized training plans. The frontend never calls OpenAI directly. All AI work happens in the FastAPI backend, where `OPENAI_API_KEY` stays in environment variables.
+A private chess coach app that works in two modes:
 
-## What Is Included
+- Static frontend mode for GitHub Pages: playable chessboard, PGN tools, local Stockfish/material evaluation, move classification, and mock engine-based coaching.
+- Backend mode for later deployment: FastAPI with backend-only OpenAI coaching. API keys are never placed in browser code.
 
-- Vite + React + TypeScript frontend
-- FastAPI backend
-- OpenAI-only backend coach integration
-- Mock coaching mode when `USE_MOCK_AI=true` or `OPENAI_API_KEY` is missing
-- PGN parsing with `python-chess`
-- Placeholder move classifications: `good`, `inaccuracy`, `mistake`, `blunder`
-- Backend tests for health, PGN parsing, PGN analysis, mock coaching, and bad PGN errors
+The GitHub Pages version is designed for:
+
+<https://biggpower08.github.io/personal-chess-coach-ai/>
+
+## Current Features
+
+- Playable responsive chessboard with legal move validation
+- Drag-and-drop and tap-to-move support
+- Flip board, reset, undo, and move navigation
+- Game status: turn, check, checkmate, stalemate, and supported draw conditions
+- PGN import, validation, replay, export, and clipboard copy
+- Browser-side Stockfish WASM worker with material-eval fallback
+- Eval bar with centipawn and mate labels
+- Analyze current position and full game
+- Move classifications: brilliant, great, good, inaccuracy, mistake, blunder
+- Beginner / intermediate / advanced coach language
+- Local static coach feedback without OpenAI
+- Light/dark theme toggle
+- Engine settings panel and toast notifications
+- FastAPI backend scaffold with OpenAI-only coach integration for future hosted backend use
 
 ## Project Structure
 
@@ -19,19 +33,38 @@ personal-chess-coach-ai/
   frontend/
   backend/
   docs/
+  .github/workflows/deploy-pages.yml
   README.md
   .env.example
   .gitignore
 ```
 
-## Setup On Windows PowerShell
+## Frontend Setup
 
 ```powershell
-cd "C:\Users\trish\OneDrive\Documents\New project\personal-chess-coach-ai"
-Copy-Item .env.example .env
+cd "C:\Users\trish\OneDrive\Documents\New project\personal-chess-coach-ai\frontend"
+npm.cmd install
+npm.cmd run dev
 ```
 
-If PowerShell blocks `npm`, use `npm.cmd`.
+Local frontend URL:
+
+```text
+http://localhost:5173/personal-chess-coach-ai/
+```
+
+Build for GitHub Pages:
+
+```powershell
+cd "C:\Users\trish\OneDrive\Documents\New project\personal-chess-coach-ai\frontend"
+npm.cmd run build
+```
+
+The production build uses this Vite base path:
+
+```text
+/personal-chess-coach-ai/
+```
 
 ## Backend Setup
 
@@ -45,7 +78,7 @@ cd "C:\Users\trish\OneDrive\Documents\New project\personal-chess-coach-ai\backen
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-If you need to recreate the virtual environment, use this Python executable:
+If the venv needs to be recreated, use:
 
 ```powershell
 & "C:\Users\trish\AppData\Local\Programs\Python\Python313\python.exe" -m venv .venv
@@ -64,21 +97,9 @@ Check the backend:
 Invoke-RestMethod http://127.0.0.1:8000/health
 ```
 
-## Frontend Setup
-
-Open a second PowerShell window:
-
-```powershell
-cd "C:\Users\trish\OneDrive\Documents\New project\personal-chess-coach-ai\frontend"
-npm.cmd install
-npm.cmd run dev
-```
-
-The frontend runs at `http://localhost:5173`.
-
 ## OpenAI And Mock Mode
 
-API keys belong only in the backend `.env` file. Do not put API keys in frontend code, browser localStorage, or React environment variables.
+OpenAI coaching remains backend-only. Do not put `OPENAI_API_KEY` in frontend code, localStorage, or GitHub Pages settings.
 
 Development mock mode:
 
@@ -87,43 +108,50 @@ USE_MOCK_AI=true
 OPENAI_API_KEY=
 ```
 
-OpenAI mode:
+OpenAI backend mode:
 
 ```text
 USE_MOCK_AI=false
 OPENAI_API_KEY=your-openai-key
 ```
 
-PowerShell example:
-
-```powershell
-$env:USE_MOCK_AI="false"
-$env:OPENAI_API_KEY="your-openai-key"
-```
-
 If `OPENAI_API_KEY` is missing, the backend falls back to mock coaching.
 
 ## Run Tests
 
-From the project root:
+Backend:
 
 ```powershell
+cd "C:\Users\trish\OneDrive\Documents\New project\personal-chess-coach-ai"
 .\backend\.venv\Scripts\python.exe -m pytest .\backend\tests
 ```
 
-Or from the backend folder:
-
-```powershell
-cd "C:\Users\trish\OneDrive\Documents\New project\personal-chess-coach-ai\backend"
-.\.venv\Scripts\python.exe -m pytest
-```
-
-Run the frontend build:
+Frontend:
 
 ```powershell
 cd "C:\Users\trish\OneDrive\Documents\New project\personal-chess-coach-ai\frontend"
 npm.cmd run build
 ```
+
+## GitHub Pages Deployment
+
+This repo includes:
+
+```text
+.github/workflows/deploy-pages.yml
+```
+
+The workflow builds `frontend/` and deploys `frontend/dist` to GitHub Pages.
+
+GitHub web UI setup:
+
+1. Go to your GitHub repo: `biggpower08/personal-chess-coach-ai`.
+2. Open `Settings`.
+3. Open `Pages`.
+4. Under `Build and deployment`, set `Source` to `GitHub Actions`.
+5. Push to the `main` branch.
+6. Open the `Actions` tab and wait for `Deploy Frontend To GitHub Pages` to finish.
+7. Visit <https://biggpower08.github.io/personal-chess-coach-ai/>.
 
 ## Push To GitHub
 
@@ -131,19 +159,25 @@ npm.cmd run build
 cd "C:\Users\trish\OneDrive\Documents\New project\personal-chess-coach-ai"
 git init
 git add .
-git commit -m "Initial OpenAI chess coach scaffold"
+git commit -m "Add static chess coach and GitHub Pages deployment"
 git branch -M main
-git remote add origin https://github.com/YOUR-USERNAME/personal-chess-coach-ai.git
+git remote add origin https://github.com/biggpower08/personal-chess-coach-ai.git
 git push -u origin main
 ```
 
-## Next Development Phases
+## Current Limitations
 
-1. Real Stockfish analysis
-2. Better move classification
-3. Real OpenAI game coaching
-4. Supabase database
-5. Stored player profiles
-6. Weakness tracking across games
-7. Training plan generation
-8. Opening repertoire analysis
+- GitHub Pages cannot host FastAPI, so OpenAI coaching is not active in the static site.
+- Browser Stockfish can be heavy on older devices; the app falls back to material evaluation if needed.
+- Principal-variation "show me" animation is not implemented yet.
+- Player profiles are placeholders until a database is connected.
+
+## Next Steps After You Talk With Your Friend
+
+1. Decide where to host the FastAPI backend for OpenAI coaching.
+2. Add real user accounts or a simple player profile identifier.
+3. Store analyzed games in Supabase.
+4. Track recurring weaknesses across games.
+5. Generate personalized training plans.
+6. Add opening repertoire analysis.
+7. Add PV animation and richer game reports.

@@ -5,7 +5,10 @@ type TrainingPlanProps = {
 };
 
 export function TrainingPlan({ items }: TrainingPlanProps) {
-  const trainingItems = items.length > 0 ? items : ['Import a game to generate focused training.'];
+  const trainingItems =
+    items.length > 0
+      ? items
+      : ['Review the largest eval swing.', 'Replay the best engine line.', 'Practice the same tactical theme.'];
 
   return (
     <section className="panel">
