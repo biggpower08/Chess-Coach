@@ -26,7 +26,7 @@ The repository listing did not show a `LICENSE` file, so this project treats the
 | Light/dark theme | Implemented | Theme toggle persists non-secret preference only. |
 | Toast notifications | Implemented | Used for PGN export, game analysis, and invalid actions. |
 | Responsive layout | Implemented | Board and panels stack on smaller screens. |
-| GitHub Pages deployment | Implemented | Vite base path is `/personal-chess-coach-ai/`; workflow deploys `frontend/dist` to Pages. |
+| GitHub Pages deployment | Implemented | Vite base path is `/Chess-Coach/`; workflow deploys `frontend/dist` to Pages. |
 
 ## Deferred Compared With The Reference Vision
 

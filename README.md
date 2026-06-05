@@ -7,7 +7,7 @@ A private chess coach app that works in two modes:
 
 The GitHub Pages version is designed for:
 
-<https://biggpower08.github.io/personal-chess-coach-ai/>
+<https://biggpower08.github.io/Chess-Coach/>
 
 ## Current Features
 
@@ -50,7 +50,7 @@ npm.cmd run dev
 Local frontend URL:
 
 ```text
-http://localhost:5173/personal-chess-coach-ai/
+http://localhost:5173/Chess-Coach/
 ```
 
 Build for GitHub Pages:
@@ -63,7 +63,7 @@ npm.cmd run build
 The production build uses this Vite base path:
 
 ```text
-/personal-chess-coach-ai/
+/Chess-Coach/
 ```
 
 ## Backend Setup
@@ -145,13 +145,13 @@ The workflow builds `frontend/` and deploys `frontend/dist` to GitHub Pages.
 
 GitHub web UI setup:
 
-1. Go to your GitHub repo: `biggpower08/personal-chess-coach-ai`.
+1. Go to your GitHub repo: `biggpower08/Chess-Coach`.
 2. Open `Settings`.
 3. Open `Pages`.
 4. Under `Build and deployment`, set `Source` to `GitHub Actions`.
 5. Push to the `main` branch.
 6. Open the `Actions` tab and wait for `Deploy Frontend To GitHub Pages` to finish.
-7. Visit <https://biggpower08.github.io/personal-chess-coach-ai/>.
+7. Visit <https://biggpower08.github.io/Chess-Coach/>.
 
 ## Push To GitHub
 
@@ -161,7 +161,7 @@ git init
 git add .
 git commit -m "Add static chess coach and GitHub Pages deployment"
 git branch -M main
-git remote add origin https://github.com/biggpower08/personal-chess-coach-ai.git
+git remote add origin https://github.com/biggpower08/Chess-Coach.git
 git push -u origin main
 ```
 
